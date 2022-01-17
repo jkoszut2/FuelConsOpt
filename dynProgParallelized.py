@@ -4,15 +4,15 @@ import time
 import multiprocessing
 from tqdm import tqdm
 import pandas as pd
-from vehicleParams import *
-from functions import findGear4
-from dynProg import DP
+from vehicleparams import *
+from functions import find_gear4
+from dynprog import dyn_prog
 
 # NOTE: Set vehicle parameters, e.g., engine torque, in the
 # vehicleParams.py file
 
 # Import straights data to iterate over
-log_name = "StraightsData_FSAEL.csv"
+log_name = "StraightsData_FSAEM.csv"
 straights_data = pd.read_csv(log_name)
 if log_name == "StraightsData_FSAEM.csv":
     title = "FSAEM"
@@ -20,9 +20,13 @@ elif log_name == "StraightsData_FSAEL.csv":
     title = "FSAEL"
 vels = straights_data['Init FL Vel [mph]'].values*1609.4/3600 # [m/s]
 dists = straights_data['Distance [miles]'].values*1609.4 # [m]
-dist_int = 0.1 # Spatial discretization length [m]
-vel_size = 10 # State space grid width
-num_CPU = 12 # Number of cores to use for multiprocessing
+dist_int = 1 # Spatial discretization length [m]
+vel_size = 5 # State space grid width
+# Number of cores to use for multiprocessing
+# Use all physical cores. `multiprocessing.cpu_count()` returns physical and
+# logical core count. It is assumed that the host CPU has hyperthreading. If
+# not, the 2 divisor can be changed to 1.
+num_CPU = int(multiprocessing.cpu_count()/2)
 
 # Round distances since dynProg discretizes spatially at 1 meter by default.
 # The rounding can be updated if a smaller disretization length is chosen.
@@ -45,12 +49,12 @@ xopts = np.zeros((len(vels), int(np.round(np.max(dists)/dist_int))+1)) * np.NaN
 gearopts = np.zeros((len(vels), int(np.round(np.max(dists)/dist_int))+1)) * np.NaN
 jopts = np.zeros((len(vels), ))
 
-def parallelDP(i):
-    """ Wrapper for DP function to be used for multiprocessing """
-    [uopt, xopt, gearopt, _, _, jopt] = DP(init_vel=vels[i],
-                                           dist_total=dists[i],
-                                           dist_interval=dist_int,
-                                           vel_size=vel_size)
+def parallel_dyn_prog(i):
+    """ Wrapper for dyn_prog function to be used for multiprocessing """
+    [uopt, xopt, gearopt, _, _, jopt] = dyn_prog(init_vel=vels[i],
+                                                 dist_total=dists[i],
+                                                 dist_interval=dist_int,
+                                                 vel_size=vel_size)
     return uopt, xopt, gearopt, jopt
 
 if __name__ == '__main__':
@@ -64,7 +68,7 @@ if __name__ == '__main__':
     pool = multiprocessing.Pool(num_CPU)
     # for ind, res in enumerate(pool.imap(parallelDP, range(len(vels)))):
     # Wrap pool.imap with tqdm to get printed progress statements
-    for ind, res in enumerate(tqdm(pool.imap(parallelDP, range(len(vels))),
+    for ind, res in enumerate(tqdm(pool.imap(parallel_dyn_prog, range(len(vels))),
                               desc="Progress", total=len(vels))):
         uopts[ind, :len(res[0])] = res[0]
         xopts[ind, :len(res[1])] = res[1]
@@ -103,7 +107,7 @@ if __name__ == '__main__':
     policy_x = np.hstack([policy_x, policy_xtmp])
     policy_x = np.arange(nanmin_xopts, nanmax_xopts + vel_space, vel_space)
     policy_size = len(policy_x)
-    policy_gear = np.array([findGear4(vel*3600/1609.4, fdr, gears, redline, r)
+    policy_gear = np.array([find_gear4(vel*3600/1609.4, fdr, gears, redline, r)
                             for vel in policy_x])
     policy_u = np.zeros((policy_size, )) * np.NaN
     policy_u_stdev = np.zeros((policy_size, )) * np.NaN
@@ -126,6 +130,22 @@ if __name__ == '__main__':
 
     tend = time.time()
     print(f"Policy computation runtime = {tend-tstart:0.2f} sec")
+
+    # Font size code taken from
+    # https://stackoverflow.com/questions/3899980/
+    # how-to-change-the-font-size-on-a-matplotlib-plot
+    plt.rcParams['figure.dpi'] = 100
+    SMALL_SIZE = 8
+    MEDIUM_SIZE = 10
+    BIGGER_SIZE = 12
+
+    plt.rc('font', size=SMALL_SIZE)          # controls default text sizes
+    plt.rc('axes', titlesize=SMALL_SIZE)     # fontsize of the axes title
+    plt.rc('axes', labelsize=MEDIUM_SIZE)    # fontsize of the x and y labels
+    plt.rc('xtick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
+    plt.rc('ytick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
+    plt.rc('legend', fontsize=SMALL_SIZE)    # legend fontsize
+    plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
 
     plt.figure()
     plt.grid()

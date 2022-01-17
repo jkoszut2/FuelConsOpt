@@ -3,12 +3,28 @@ import warnings
 import pandas as pd
 import matplotlib.pyplot as plt
 import time
-from functions import findDownforce, findDrag
-from vehicleParams import *
+from functions import find_downforce, find_drag
+from vehicleparams import *
 
-def accelSim(input_FEPW, input_Torque_lbft, input_Dist_meters=75,
-             frontVel_meterspersec=10, rearVel_meterspersec=10, gear=2,
-             modifierArray=np.array([0]), producePlots=0):
+def accel_sim(input_FEPW, input_Torque_lbft, input_Dist_meters=75,
+              frontVel_meterspersec=5, rearVel_meterspersec=5, gear=1,
+              modifierArray=np.array([0]), producePlots=0):
+    """ Straight line acceleration and fuel consumption simulator
+
+    Launch control functionality is not implemented so the inputs for front and
+    rear wheel speed should match.
+
+    @param input_FEPW Engine fuel injection pulse width map [ms]
+    @param input_Torque_lbft Engine torque map [lb-ft]
+    @param input_Dist_meters Travel distance [m]
+    @param frontVel_meterspersec Front vehicle speed [m/s]
+    @param rearVel_meterspersec Rear vehicle speed [m/s]
+    @param gear Initial gear
+    @param modifierArray Array to pass in inputs for case studies
+    @param producePlots Bit controlling plot generation
+
+    @return acceleration time, state data
+    """
 
     global dt, shifttime, shifttimer, shiftflag, FEPW, Torque_Nm, RPM, LC_wss
 
@@ -32,7 +48,7 @@ def accelSim(input_FEPW, input_Torque_lbft, input_Dist_meters=75,
         warnings.warn("Error! Engine data is not sufficiently populated!\n")
         warnings.warn("Simulation may not run correctly if time step is too large.\n")
 
-    # NOTE: No warning if rpm input to findTorque > redline
+    # NOTE: No warning if rpm input to find_torque > redline
     # Result for above is 0 and NOT nan, thus need another case to detect
 
     distMax = input_Dist_meters;
@@ -67,16 +83,16 @@ def accelSim(input_FEPW, input_Torque_lbft, input_Dist_meters=75,
     init_WSSRL = rearVel_meterspersec*3600/1609.4; # miles/hr
     # Drag
     index_Drag = 17-1;
-    init_Drag = findDrag(init_WSSFL);
+    init_Drag = find_drag(init_WSSFL);
     # Downforce
     index_Downforce = 18-1;
-    init_Downforce = findDownforce(init_WSSFL);
+    init_Downforce = find_downforce(init_WSSFL);
     # RPM
     index_RPM = 6-1;
     init_RPM = rearVel_meterspersec/(np.pi*2*r)*60*fdr*gears[init_Gear-1]; # rpm
     # Acceleration
     index_Acc = 4-1;
-    init_Acc = ((findTorque(init_RPM)*fdr*gears[init_Gear-1])/r-init_Drag)\
+    init_Acc = ((find_torque(init_RPM)*fdr*gears[init_Gear-1])/r-init_Drag)\
                 /m/g*dteff; # [g]
     # Instantaneous Fuel Consumption
     index_FuelCons = 9-1;
@@ -86,7 +102,7 @@ def accelSim(input_FEPW, input_Torque_lbft, input_Dist_meters=75,
     init_CumFuelCons = 0; # cc
     # Engine Torque
     index_Torque_Nm = 11-1;
-    init_Torque_Nm = findTorque(init_RPM); # Nm
+    init_Torque_Nm = find_torque(init_RPM); # Nm
     # Wheel Torque
     index_Wheel_Torque_Nm = 12-1;
     init_Wheel_Torque_Nm = init_Torque_Nm; # Nm
@@ -141,18 +157,18 @@ def accelSim(input_FEPW, input_Torque_lbft, input_Dist_meters=75,
         # Using previous solution, find wheel speed, gear, and max Fx
         prev_WSSFL = x[i-1,index_WSSFL]; # front wheel speed [mph]
         prev_WSSRL = x[i-1,index_WSSRL]; # rear wheel speed [mph]
-        prev_Gear = findGear(prev_WSSRL, x[i-1, index_Gear]);
-        prev_Drag = findDrag(prev_WSSFL); # N
-        prev_Downforce = findDownforce(prev_WSSFL); # N
+        prev_Gear = find_gear(prev_WSSRL, x[i-1, index_Gear]);
+        prev_Drag = find_drag(prev_WSSFL); # N
+        prev_Downforce = find_downforce(prev_WSSFL); # N
         prev_WeightTransferAcc = m*x[i-1, index_Acc]*(cgh/wb)*g; # N
         prev_WeightRear = (1-wdist)*m*9.8 + prev_Downforce*cp \
                           + prev_WeightTransferAcc; # N
         maxFx = prev_WeightRear*uk; # N
 
         # Find engine speed and torque output
-        prev_rpm = findRPM(prev_WSSRL, prev_Gear);
+        prev_rpm = find_rpm(prev_WSSRL, prev_Gear);
         # Find engine torque output
-        prev_engine_Torque_Nm = findTorque(prev_rpm);
+        prev_engine_Torque_Nm = find_torque(prev_rpm);
         prev_wheel_Torque_Nm = x[i-1, index_Wheel_Torque_Nm];
 
         # Find longitudinal force at rear wheels assuming no slip
@@ -169,9 +185,9 @@ def accelSim(input_FEPW, input_Torque_lbft, input_Dist_meters=75,
         x[i, index_Gear] = prev_Gear;
         x[i, index_WSSFL] = x[i, index_Vel]*3600/1609.4;
         x[i, index_WSSRL] = x[i-1, index_WSSRL] + dxdt[2-1, 0]*dt*3600/1609.4;
-        curr_rpm = findRPM(x[i, index_WSSRL], prev_Gear);
+        curr_rpm = find_rpm(x[i, index_WSSRL], prev_Gear);
         x[i, index_RPM] = curr_rpm;
-        currFuelCons = findFuelCons(curr_rpm);
+        currFuelCons = find_fuel_cons(curr_rpm);
         x[i, index_FuelCons] = currFuelCons;
         x[i, index_CumFuelCons] = x[i-1, index_CumFuelCons] + currFuelCons;
         x[i, index_Torque_Nm] = prev_engine_Torque_Nm;
@@ -235,7 +251,24 @@ def accelSim(input_FEPW, input_Torque_lbft, input_Dist_meters=75,
         print(f'Accel time: {accel_time*1000:0.1f} msec\n', )
         print(f'Fuel consumed: {fuel_consumed*1000:0.4f} mcc\n')
 
+        # Font size code taken from
+        # https://stackoverflow.com/questions/3899980/
+        # how-to-change-the-font-size-on-a-matplotlib-plot
+        plt.rcParams['figure.dpi'] = 100
+        SMALL_SIZE = 8
+        MEDIUM_SIZE = 10
+        BIGGER_SIZE = 12
+
+        plt.rc('font', size=SMALL_SIZE)          # controls default text sizes
+        plt.rc('axes', titlesize=SMALL_SIZE)     # fontsize of the axes title
+        plt.rc('axes', labelsize=MEDIUM_SIZE)    # fontsize of the x and y labels
+        plt.rc('xtick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
+        plt.rc('ytick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
+        plt.rc('legend', fontsize=SMALL_SIZE)    # legend fontsize
+        plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
+
         plt.figure(figsize=(10, 6))
+        plt.suptitle(f"{input_Dist_meters} m Acceleration Simulation")
         plt.subplot(2,2,1)
         plt.grid()
         plt.plot(t[:lastindex+1], x[:lastindex+1, index_Pos])
@@ -272,7 +305,7 @@ def accelSim(input_FEPW, input_Torque_lbft, input_Dist_meters=75,
         plt.ylim([0, max(x[:lastindex,index_Gear])+0.5])
         lines1, labels1 = ax1.get_legend_handles_labels()
         lines2, labels2 = ax2.get_legend_handles_labels()
-        ax2.legend(lines1 + lines2, labels1 + labels2, loc='lower left')
+        ax2.legend(lines1 + lines2, labels1 + labels2, loc='lower right')
         plt.xlim([0, t[lastindex]])
         ax1.set_xlabel('Time [sec]')
         ax1.set_ylabel('Force [N]')
@@ -299,7 +332,7 @@ def accelSim(input_FEPW, input_Torque_lbft, input_Dist_meters=75,
 
     return accel_time, stateData2
 
-def findFuelCons(curr_rpm):
+def find_fuel_cons(curr_rpm):
     """ Find fuel injection quantity at current engine speed and time
     discretization
     Global variables: dt FEPW RPM redline
@@ -325,7 +358,7 @@ def findFuelCons(curr_rpm):
     fuelcons = inj_duty/100*dt*inj_flowrate/60*4; # cc
     return fuelcons   
 
-def findGear(currVehV, prevGear):
+def find_gear(currVehV, prevGear):
     """ Find gear given only vehicle velocity
     currVehV is current vehicle velocity in miles per hour
     prevGear is previous gear (min=1, max = 6) and is used to determine if
@@ -351,9 +384,9 @@ def findGear(currVehV, prevGear):
         shiftflag = 0;
     return gear
 
-def findGear2(currVehV):
+def find_gear2(currVehV):
     """ Find gear given only vehicle velocity
-    Same as findGear but with the change of not using a shift flag
+    Same as find_gear but with the change of not using a shift flag
     Use this function to initialize the accel sim
     currVehV is current vehicle velocity in miles per hour
     Global variables: fdr gears redline r
@@ -364,12 +397,12 @@ def findGear2(currVehV):
         gear = j;
         j = j-1;
 
-def findLCrpm(curr_wheelspeed_mph):
+def find_lc_rpm(curr_wheelspeed_mph):
     # Global variables: LC_rpm LC_wss
     rpm_launch = np.interp(curr_wheelspeed_mph, LC_wss, LC_rpm);
     return rpm_launch
 
-def findRPM(currVehV, currGear):
+def find_rpm(currVehV, currGear):
     """ Find RPM given vehicle velocity and gear 
     currVehV is current vehicle velocity in miles per hour
     currGear is current gear (min=1, max = 6)
@@ -379,7 +412,7 @@ def findRPM(currVehV, currGear):
     rpm = currVehV/60*1609.4/(2*np.pi*r)*fdr*gears[currGear-1];
     return rpm
 
-def findTorque(curr_rpm):
+def find_torque(curr_rpm):
     """ Find engine torque at current engine speed
     Global variables: dt, RPM, Torque_Nm, redline,
                                         shiftflag, shifttime, shifttimer
@@ -404,7 +437,7 @@ def findTorque(curr_rpm):
         shifttimer = shifttimer + shifttime;
     return torque
 
-def findVehV(currRPM, currGear):
+def find_vehv(currRPM, currGear):
     """ Finds vehicle velocity in miles per hour
     Global variables: r, fdr, gears
     """
@@ -413,7 +446,7 @@ def findVehV(currRPM, currGear):
     return VehV_mph
 
 # start = time.time()
-# [accelTime, stateData] = accelSim(input_FEPW, input_Torque_lbft)
+# [accelTime, stateData] = accel_sim(input_FEPW, input_Torque_lbft)
 # end = time.time()
 # print(f"Runtime: {end - start:0.5f} sec")
-# accelSim(input_FEPW, input_Torque_lbft, producePlots=1)
+# accel_sim(input_FEPW, input_Torque_lbft, producePlots=1)

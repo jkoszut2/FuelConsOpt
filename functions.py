@@ -6,7 +6,7 @@ are included in this file.
 
 import numpy as np
 
-def findDownforce(curr_WSSf_mph):
+def find_downforce(curr_WSSf_mph):
     """ Find drag at current vehicle speed in mph
     Fit obtained from 2019 FCA wind tunnel data below
         x = [35, 45, 55]'; % speed [mph]
@@ -20,7 +20,7 @@ def findDownforce(curr_WSSf_mph):
     downforce_N = 0.257206872977041*curr_WSSf_mph**2; # [N]
     return downforce_N
 
-def findDrag(curr_WSSf_mph):
+def find_drag(curr_WSSf_mph):
     """ Find drag at current vehicle speed in mph
     Fit obtained from 2019 FCA wind tunnel data below
         x = [35, 45, 55]; % speed [mph]
@@ -34,7 +34,7 @@ def findDrag(curr_WSSf_mph):
     drag_N = 0.15614997429366*curr_WSSf_mph**2; # [N]
     return drag_N
 
-def pointsDelta(time_sec=0, fuel_l=0):
+def points_delta(time_sec=0, fuel_l=0):
     """ Calculate the point gain (or loss) from a perturbation
     in the lap time and/or fuel consumption. Based on FSAEM 2019 results.
     Points are calculated as a sum of endurance and efficiency events.
@@ -52,7 +52,7 @@ def pointsDelta(time_sec=0, fuel_l=0):
     delta = new - original
     return delta
 
-def pointsDeltaLin(time_sec=0, fuel_l=0):
+def points_delta_lin(time_sec=0, fuel_l=0):
     """ Calculate the point gain (or loss) from a perturbation
     in the lap time and/or fuel consumption. Based on FSAEM 2019 results.
     Points are calculated as a sum of endurance and efficiency events.
@@ -66,12 +66,12 @@ def pointsDeltaLin(time_sec=0, fuel_l=0):
     """
 
     h = 1e-8
-    grad_time = (pointsDelta(h, 0) - pointsDelta(-h, 0)) / (2*h)
-    grad_fuel = (pointsDelta(0, h) - pointsDelta(0, -h)) / (2*h)
+    grad_time = (points_delta(h, 0) - points_delta(-h, 0)) / (2*h)
+    grad_fuel = (points_delta(0, h) - points_delta(0, -h)) / (2*h)
     delta = time_sec*grad_time + fuel_l*grad_fuel
     return delta
 
-def findGear4(currVehV, fdr, gears, redline, r):
+def find_gear4(currVehV, fdr, gears, redline, r):
     """ Find gear given only vehicle velocity
     Same as findGear2 in accelSim but meant to be used as a standalone function
 

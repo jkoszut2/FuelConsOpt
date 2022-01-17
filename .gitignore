@@ -1,6 +1,9 @@
 # User folder to be ignored
 ignore/
 
+# Visual aesthetics for folder on Mac OS
+.DS_Store
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

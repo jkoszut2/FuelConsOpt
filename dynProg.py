@@ -1,15 +1,15 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import time
-from vehicleParams import *
-from accelSim import *
-from functions import pointsDelta, findGear4
+from vehicleparams import *
+from accelsim import *
+from functions import points_delta, find_gear4
 
 # NOTE: Set vehicle parameters, e.g., gear ratios and redline, in the
 # vehicleParams.py file
 
-def DP(init_vel=15, dist_total=35, dist_interval=1, vel_size=5,
-       plots=0, debug_mode=0):
+def dyn_prog(init_vel=15, dist_total=35, dist_interval=1, vel_size=5,
+             plots=0, debug_mode=0):
     """
     Given an initial velocity and travel distance, find the optimal
     lambda (input) to maximize points from the efficiency and endurance events
@@ -34,8 +34,7 @@ def DP(init_vel=15, dist_total=35, dist_interval=1, vel_size=5,
     # dist_total = 35 # [m] FSAEL Mean
     init_velF = init_vel # [m/s]
     init_velR = init_vel # [m/s]
-    init_gear = findGear4(init_vel*3600/1609.4, fdr, gears, redline, r)
-    plots = 0
+    init_gear = find_gear4(init_vel*3600/1609.4, fdr, gears, redline, r)
     debug_mode = 0
 
     # Lambda (input) perturbation grid
@@ -54,18 +53,18 @@ def DP(init_vel=15, dist_total=35, dist_interval=1, vel_size=5,
         for j in range(dist_iters):
             lamdev = np.array([lambdadevs[i]])
             if j == 0:
-                [accelTime, stateData] = accelSim(input_FEPW, input_Torque_lbft,
-                                                  dist_interval, init_velF,
-                                                  init_velR, init_gear,
-                                                  lamdev, 0)
+                [accelTime, stateData] = accel_sim(input_FEPW, input_Torque_lbft,
+                                                   dist_interval, init_velF,
+                                                   init_velR, init_gear,
+                                                   lamdev, 0)
             else:
                 velF = stateData['vel [m/s]'].values[-1]
                 velR = velF
                 gear = round(stateData['gear'].values[-1])
-                [accelTime, stateData] = accelSim(input_FEPW, input_Torque_lbft,
-                                                  dist_interval, velF,
-                                                  velR, gear,
-                                                  lamdev, 0)
+                [accelTime, stateData] = accel_sim(input_FEPW, input_Torque_lbft,
+                                                   dist_interval, velF,
+                                                   velR, gear,
+                                                   lamdev, 0)
             results[j, i] = accelTime
             vel_reach[j, i] = stateData['vel [m/s]'].values[-1]
             time_reach[j, i] = stateData['time [sec]'].values[-1]
@@ -95,17 +94,17 @@ def DP(init_vel=15, dist_total=35, dist_interval=1, vel_size=5,
             if debug_mode: print("="*20, f"\nk={k}, xIdx={xIdx}", 
                                  "\nu, costCurr, costToGo, costNext")
             for uIdx in range(len(lambdadevs)):
-                gear = findGear4(curr_V*3600/1609.4, fdr, gears, redline, r)
-                [accelTime, stateData] = accelSim(input_FEPW, input_Torque_lbft,
-                                                  dist_interval, curr_V,
-                                                  curr_V, gear,
-                                                  np.array([lambdadevs[uIdx]]), 0)
+                gear = find_gear4(curr_V*3600/1609.4, fdr, gears, redline, r)
+                [accelTime, stateData] = accel_sim(input_FEPW, input_Torque_lbft,
+                                                   dist_interval, curr_V,
+                                                   curr_V, gear,
+                                                   np.array([lambdadevs[uIdx]]), 0)
                 x_next = stateData['vel [m/s]'].values[-1];
                 # Time perturbation [sec]
                 delta_t = stateData['time [sec]'].values[-1] - time_reach[k, 0];
                 # Fuel perturbation [cc]
                 delta_f = stateData['cumfuelcons [cc]'].values[-1] - fuel_reach[k, 0];
-                costCurr = pointsDelta(delta_t, delta_f/1000)
+                costCurr = points_delta(delta_t, delta_f/1000)
                 if k == dist_iters-1:
                     # No terminal state penalty
                     costToGo = 0
@@ -145,46 +144,62 @@ def DP(init_vel=15, dist_total=35, dist_interval=1, vel_size=5,
     fuel_opt[0] = 0
     cost_opt[0] = 0
     xk_opt[1] = vel_opt[0, ::2][maxIdx]
-    gear_opt[1] = findGear4(xk_opt[1]*3600/1609.4, fdr, gears, redline, r)
-    [accelTime, stateData] = accelSim(input_FEPW, input_Torque_lbft,
-                                      dist_interval, xk_opt[0], xk_opt[0],
-                                      gear_opt[0],
-                                      np.array([uk_opt[0]]), 0)
+    gear_opt[1] = find_gear4(xk_opt[1]*3600/1609.4, fdr, gears, redline, r)
+    [accelTime, stateData] = accel_sim(input_FEPW, input_Torque_lbft,
+                                       dist_interval, xk_opt[0], xk_opt[0],
+                                       gear_opt[0],
+                                       np.array([uk_opt[0]]), 0)
     time_opt[1] = stateData['time [sec]'].values[-1]
     fuel_opt[1] = stateData['cumfuelcons [cc]'].values[-1]
-    cost_opt[1] = pointsDelta(time_opt[1]-time_reach[0, 0],
-                              (fuel_opt[1]-fuel_reach[0, 0])/1000)
+    cost_opt[1] = points_delta(time_opt[1]-time_reach[0, 0],
+                               (fuel_opt[1]-fuel_reach[0, 0])/1000)
     for i in range(1, dist_iters):
         uk_opt[i] = np.interp(xk_opt[i], vel_grid[i, :][::-1],
                               u_opt[i, :][::-1])
-        [accelTime, stateData] = accelSim(input_FEPW, input_Torque_lbft,
-                                          dist_interval, xk_opt[i],
-                                          xk_opt[i], gear_opt[i],
-                                          np.array([uk_opt[i]]), 0)
+        [accelTime, stateData] = accel_sim(input_FEPW, input_Torque_lbft,
+                                           dist_interval, xk_opt[i],
+                                           xk_opt[i], gear_opt[i],
+                                           np.array([uk_opt[i]]), 0)
         xk_opt[i+1] = stateData['vel [m/s]'].values[-1]
         gear_opt[i+1] = stateData['gear'].values[-1]
         currtime = stateData['time [sec]'].values[-1]
         currfuel = stateData['cumfuelcons [cc]'].values[-1]
         time_opt[i+1] = time_opt[i] + currtime
         fuel_opt[i+1] = fuel_opt[i] + currfuel
-        cost_opt[i+1] = pointsDelta(currtime-time_reach[i, 0],
-                                    (currfuel-fuel_reach[i, 0])/1000)
+        cost_opt[i+1] = points_delta(currtime-time_reach[i, 0],
+                                     (currfuel-fuel_reach[i, 0])/1000)
     # NOTE: cost_opt is an array of discretized nonlinear costs which
     # is not the same as the overall nonlinear cost using the total
     # time and fuel consumption, but it is close and might be informative
     # to look at graphically since it portrays the cost delta at each spatial
     # step as opposed to one final number
     # The error can be found by doing np.sum(cost_opt) - cost_opt_total
-    # If the linear cost function is used instead (pointsDeltaLin)
+    # If the linear cost function is used instead (points_delta_lin)
     # then this error should be 0.
-    cost_opt_total = pointsDelta(time_opt[-1]-np.sum(time_reach[:, 0]),
+    cost_opt_total = points_delta(time_opt[-1]-np.sum(time_reach[:, 0]),
                                   (fuel_opt[-1]-np.sum(fuel_reach[:, 0]))/1000)
     tend = time.time()
     print(f"Optimal trajectory generation runtime = {tend-tstart:0.2f} sec")
 
     if plots == 1:
-        plt.figure(figsize=(10, 8))
+        # Font size code taken from
+        # https://stackoverflow.com/questions/3899980/
+        # how-to-change-the-font-size-on-a-matplotlib-plot
+        plt.rcParams['figure.dpi'] = 100
+        SMALL_SIZE = 8
+        MEDIUM_SIZE = 10
+        BIGGER_SIZE = 12
 
+        plt.rc('font', size=SMALL_SIZE)          # controls default text sizes
+        plt.rc('axes', titlesize=SMALL_SIZE)     # fontsize of the axes title
+        plt.rc('axes', labelsize=MEDIUM_SIZE)    # fontsize of the x and y labels
+        plt.rc('xtick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
+        plt.rc('ytick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
+        plt.rc('legend', fontsize=SMALL_SIZE)    # legend fontsize
+        plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
+
+        plt.figure(figsize=(10, 8))
+        plt.suptitle(fr"Optimal Trajectory for $\Delta x={dist_total}$ m, $v_0={init_vel}$ m/s")
         # Plot optimal input trajectory as a function of rpm
         plt.subplot(2,2,1)
         plt.grid()
@@ -248,7 +263,7 @@ def DP(init_vel=15, dist_total=35, dist_interval=1, vel_size=5,
         ax2.set_ylabel('Gear', rotation=270, va='bottom')
 
         # Plot optimal time and time boundary
-        plt.figure()
+        plt.figure(figsize=(5, 4))
         plt.grid()
         plt.plot(np.hstack([distance_steps, dist_total]),
                  np.hstack([0, np.cumsum(time_reach[:, 1])]),
@@ -263,7 +278,7 @@ def DP(init_vel=15, dist_total=35, dist_interval=1, vel_size=5,
         plt.ylabel('Time [sec]')
 
         # Plot optimal fuel consumption and fuel boundary
-        plt.figure()
+        plt.figure(figsize=(5, 4))
         plt.grid()
         # This is not a guaranteed lower bound on fuel consumption but it will
         # be plotted for illustrative purposes
