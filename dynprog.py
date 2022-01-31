@@ -106,8 +106,20 @@ def dyn_prog(init_vel=15, dist_total=35, dist_interval=1, vel_size=5,
                 delta_f = stateData['cumfuelcons [cc]'].values[-1] - fuel_reach[k, 0];
                 costCurr = points_delta(delta_t, delta_f/1000)
                 if k == dist_iters-1:
-                    # No terminal state penalty
-                    costToGo = 0
+                    # Terminal Cost
+                    # Using extrapolation and the assumption that velocity is
+                    # constant at the end of the straight, calculate the time
+                    # and fuel required to intersect the nominal braking
+                    # trajectory. Use this for the terminal cost.
+                    max_braking = 1.5 # g's
+                    t_brake_nom = (vel_reach[-1, 0] - x_next)/(max_braking*g)
+                    distance = vel_reach[-1, 0]*t_brake_nom - \
+                               0.5*max_braking*g*t_brake_nom**2
+                    # Extrapolation
+                    t_brake_new = stateData['time [sec]'].values[-1]*distance/stateData['pos [m]'].values[-1]
+                    f_brake_new = stateData['cumfuelcons [cc]'].values[-1]*distance/stateData['pos [m]'].values[-1]
+                    # Assume no fuel used during braking, i.e., "f_brake_nom" is 0
+                    costToGo = points_delta(t_brake_new-t_brake_nom, f_brake_new/1000)
                 else:
                     costToGo = np.interp(x_next, vel_grid[k+1,:][::-1],
                                          j_opt[k+1,:][::-1]);
@@ -174,10 +186,19 @@ def dyn_prog(init_vel=15, dist_total=35, dist_interval=1, vel_size=5,
     # to look at graphically since it portrays the cost delta at each spatial
     # step as opposed to one final number
     # The error can be found by doing np.sum(cost_opt) - cost_opt_total
-    # If the linear cost function is used instead (points_delta_lin)
-    # then this error should be 0.
+    # If the linear cost function is used instead (points_delta_lin),
+    # then this error should be 0, ignoring the terminal cost penalty.
     cost_opt_total = points_delta(time_opt[-1]-np.sum(time_reach[:, 0]),
                                   (fuel_opt[-1]-np.sum(fuel_reach[:, 0]))/1000)
+    # Add terminal cost penalty (intersecting with nominal braking trajectory)
+    t_brake_nom = (vel_reach[-1, 0] - xk_opt[-1])/(max_braking*g)
+    distance = vel_reach[-1, 0]*t_brake_nom - 0.5*max_braking*g*t_brake_nom**2
+    t_brake_new = distance/xk_opt[-1]
+    t_brake_new = currtime*distance/stateData['pos [m]'].values[-1]
+    f_brake_new = currfuel*distance/stateData['pos [m]'].values[-1]
+    # Assume no fuel used during braking, i.e., "f_brake_nom" is 0
+    costToGo = points_delta(t_brake_new-t_brake_nom, f_brake_new/1000)
+    cost_opt_total = cost_opt_total + costToGo
     tend = time.time()
     print(f"Optimal trajectory generation runtime = {tend-tstart:0.2f} sec")
 
