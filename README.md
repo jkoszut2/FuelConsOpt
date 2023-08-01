@@ -1,4 +1,4 @@
-# FuelConsSim2
-See the wiki [here](https://github.com/jkoszut2/FuelConsSim2/wiki) for examples and documentation.
+# FuelConsOpt
+Formula SAE (FSAE) is an intercollegiate competition where students from across the world design, manufacture, and compete with a small Formula-style race car. The competition consists of both static events, such as a design presentation, and dynamic events, such as a 75 meter acceleration. Each event has a certain maximum number of points that can be obtained from it. Out of all events, the combination of endurance and efficiency events is where teams have the most points to gain. The endurance and efficiency events consist of a 22 kilometer race where teams are given points for both how fast the race is completed as well as how much fuel is consumed during the race. Going faster generally requires being less fuel efficient, and vice versa. Therefore, the breakdown of endurance and efficiency points necessitates a tradeoff that teams have to make between speed and fuel efficiency. The goal of the work in this repository is to study the optimal tradeoff between speed and fuel efficiency using dynamic programming and real-world steady state dynamometer data to maximize points from the FSAE endurance and efficiency events.
 
-Use of dynamic programming to find an optimal power-limited engine calibration for the FSAE endurance and efficiency events.
+See the wiki [here](https://github.com/jkoszut2/FuelConsOpt/wiki) for examples and documentation.
